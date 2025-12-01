@@ -37,9 +37,6 @@ export function LandingPage({ onGetStarted }: LandingPageProps) {
                   Get Started Free
                   <ArrowRight className="w-5 h-5" />
                 </button>
-                <button className="px-8 py-4 bg-white text-purple-600 rounded-full border-2 border-purple-200 hover:border-purple-400 hover:shadow-lg transition-all">
-                  Learn More
-                </button>
               </div>
               
               <div className="mt-12 grid grid-cols-3 gap-6 max-w-md mx-auto lg:mx-0">

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { createClient } from '@supabase/supabase-js';
-import { projectId, publicAnonKey } from './utils/supabase/info';
+import { getSupabaseClient } from './utils/supabase/client';
+import { projectId } from './utils/supabase/info';
 import { Navbar } from './components/Navbar';
 import { LandingPage } from './components/LandingPage';
 import { AuthPage } from './components/AuthPage';
@@ -26,10 +26,7 @@ export default function App() {
   const [resultData, setResultData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
-  const supabase = createClient(
-    `https://${projectId}.supabase.co`,
-    publicAnonKey
-  );
+  const supabase = getSupabaseClient();
 
   useEffect(() => {
     checkSession();

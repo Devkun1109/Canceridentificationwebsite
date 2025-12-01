@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Mail, Lock, User, Eye, EyeOff, Loader } from 'lucide-react';
-import { createClient } from '@supabase/supabase-js';
-import { projectId, publicAnonKey } from '../utils/supabase/info';
+import { getSupabaseClient } from '../utils/supabase/client';
+import { projectId } from '../utils/supabase/info';
 
 interface AuthPageProps {
   onAuthSuccess: (user: any) => void;
@@ -19,10 +19,7 @@ export function AuthPage({ onAuthSuccess, onForgotPassword }: AuthPageProps) {
   });
   const [error, setError] = useState('');
 
-  const supabase = createClient(
-    `https://${projectId}.supabase.co`,
-    publicAnonKey
-  );
+  const supabase = getSupabaseClient();
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });

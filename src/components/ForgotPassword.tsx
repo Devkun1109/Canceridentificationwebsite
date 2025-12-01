@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { Mail, ArrowLeft, CheckCircle, Loader } from 'lucide-react';
-import { createClient } from '@supabase/supabase-js';
-import { projectId, publicAnonKey } from '../utils/supabase/info';
+import { getSupabaseClient } from '../utils/supabase/client';
 
 interface ForgotPasswordProps {
   onBack: () => void;
@@ -13,10 +12,7 @@ export function ForgotPassword({ onBack }: ForgotPasswordProps) {
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
 
-  const supabase = createClient(
-    `https://${projectId}.supabase.co`,
-    publicAnonKey
-  );
+  const supabase = getSupabaseClient();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
