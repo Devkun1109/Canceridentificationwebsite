@@ -272,12 +272,63 @@ app.post('/make-server-83197308/analyze', authenticateUser, async (c) => {
       return c.json({ error: 'Forbidden: Cannot analyze for other users' }, 403);
     }
 
-    // TODO: Replace this with actual ML API call
-    // For now, generate mock results
-    const mockDiseases = [
-      {
-        name: 'Melanoma',
-        confidence: 75 + Math.random() * 20,
+    // Get the Hugging Face API token
+    const hfToken = Deno.env.get('HUGGINGFACE_API_TOKEN');
+    if (!hfToken) {
+      console.error('HUGGINGFACE_API_TOKEN not configured');
+      return c.json({ error: 'ML service not configured' }, 500);
+    }
+
+    // Fetch the image from the signed URL
+    const imageResponse = await fetch(imageUrl);
+    if (!imageResponse.ok) {
+      throw new Error('Failed to fetch image from storage');
+    }
+    const imageBlob = await imageResponse.blob();
+
+    // Call Hugging Face Gradio API
+    const hfApiUrl = 'https://avanniiii-skin-disease-classifier.hf.space/api/predict';
+    
+    // Create form data for the API
+    const formData = new FormData();
+    formData.append('data', JSON.stringify([imageBlob]));
+
+    const mlResponse = await fetch(hfApiUrl, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${hfToken}`,
+      },
+      body: formData,
+    });
+
+    if (!mlResponse.ok) {
+      const errorText = await mlResponse.text();
+      console.error('Hugging Face API error:', errorText);
+      throw new Error('ML analysis failed');
+    }
+
+    const mlResult = await mlResponse.json();
+    console.log('ML Result:', mlResult);
+
+    // Parse the ML result
+    // Expected format: { disease_code, disease_name, confidence, all_probabilities }
+    const prediction = mlResult.data?.[0] || mlResult;
+    
+    // Disease information mapping
+    const diseaseInfo: Record<string, any> = {
+      'nv': {
+        fullName: 'Melanocytic nevi: benign mole',
+        severity: 'Low',
+        description: 'A benign (non-cancerous) mole formed by melanocytes. Generally harmless but should be monitored for changes.',
+        recommendations: [
+          'Monitor the mole for any changes in size, shape, or color',
+          'Use sunscreen to protect your skin',
+          'Schedule regular skin checks with a dermatologist',
+          'Take photos to track any changes over time',
+        ],
+      },
+      'mel': {
+        fullName: 'Melanoma: dangerous skin cancer',
         severity: 'High',
         description: 'A type of skin cancer that develops in melanocytes. Early detection is crucial for successful treatment.',
         recommendations: [
@@ -287,9 +338,19 @@ app.post('/make-server-83197308/analyze', authenticateUser, async (c) => {
           'Do not attempt self-treatment',
         ],
       },
-      {
-        name: 'Basal Cell Carcinoma',
-        confidence: 70 + Math.random() * 15,
+      'bkl': {
+        fullName: 'Benign keratosis: non-cancerous growth',
+        severity: 'Low',
+        description: 'A non-cancerous skin growth that is usually harmless. Common in older adults.',
+        recommendations: [
+          'Consult with a dermatologist if it changes or becomes irritated',
+          'Protect skin from excessive sun exposure',
+          'Regular skin monitoring is recommended',
+          'Treatment is usually not necessary unless for cosmetic reasons',
+        ],
+      },
+      'bcc': {
+        fullName: 'Basal cell carcinoma: type of skin cancer',
         severity: 'Moderate',
         description: 'The most common form of skin cancer, usually caused by sun exposure. Generally slow-growing and treatable.',
         recommendations: [
@@ -299,11 +360,10 @@ app.post('/make-server-83197308/analyze', authenticateUser, async (c) => {
           'Avoid picking or scratching the area',
         ],
       },
-      {
-        name: 'Actinic Keratosis',
-        confidence: 65 + Math.random() * 20,
-        severity: 'Low',
-        description: 'Rough, scaly patches on skin caused by years of sun exposure. Considered precancerous.',
+      'akiec': {
+        fullName: 'Actinic keratoses: precancerous lesions',
+        severity: 'Moderate',
+        description: 'Rough, scaly patches on skin caused by years of sun exposure. Considered precancerous and should be treated.',
         recommendations: [
           'Consult with a dermatologist for treatment options',
           'Use daily sunscreen (SPF 30+)',
@@ -311,9 +371,38 @@ app.post('/make-server-83197308/analyze', authenticateUser, async (c) => {
           'Regular skin checks to monitor progression',
         ],
       },
-    ];
+      'vasc': {
+        fullName: 'Vascular lesions: abnormal blood vessels',
+        severity: 'Low',
+        description: 'Abnormalities in blood vessels that appear on the skin. Usually benign but may require medical evaluation.',
+        recommendations: [
+          'Consult a dermatologist for proper diagnosis',
+          'Avoid trauma to the affected area',
+          'Monitor for any changes in size or appearance',
+          'Treatment options are available if desired',
+        ],
+      },
+      'df': {
+        fullName: 'Dermatofibroma: benign skin nodule',
+        severity: 'Low',
+        description: 'A common benign skin growth, usually firm to the touch. Generally harmless and does not require treatment.',
+        recommendations: [
+          'No treatment necessary unless it becomes bothersome',
+          'Avoid scratching or irritating the area',
+          'Consult a dermatologist if it changes or causes discomfort',
+          'Removal is possible if desired for cosmetic reasons',
+        ],
+      },
+    };
 
-    const selectedDisease = mockDiseases[Math.floor(Math.random() * mockDiseases.length)];
+    const diseaseCode = prediction.disease_code;
+    const confidence = Math.round(prediction.confidence * 100 * 100) / 100; // Convert to percentage
+    const info = diseaseInfo[diseaseCode] || {
+      fullName: prediction.disease_name || 'Unknown',
+      severity: 'Unknown',
+      description: 'Unable to determine specific condition. Please consult a dermatologist.',
+      recommendations: ['Consult a dermatologist for proper diagnosis and treatment'],
+    };
 
     // Generate scan ID
     const scanId = `scan_${userId}_${Date.now()}`;
@@ -323,11 +412,13 @@ app.post('/make-server-83197308/analyze', authenticateUser, async (c) => {
       id: scanId,
       user_id: userId,
       image_url: imageUrl,
-      disease_name: selectedDisease.name,
-      confidence: selectedDisease.confidence,
-      severity: selectedDisease.severity,
-      description: selectedDisease.description,
-      recommendations: selectedDisease.recommendations,
+      disease_code: diseaseCode,
+      disease_name: info.fullName,
+      confidence: confidence,
+      severity: info.severity,
+      description: info.description,
+      recommendations: info.recommendations,
+      all_probabilities: prediction.all_probabilities || {},
       created_at: new Date().toISOString(),
     };
 
@@ -335,11 +426,13 @@ app.post('/make-server-83197308/analyze', authenticateUser, async (c) => {
 
     return c.json({
       scanId,
-      disease_name: selectedDisease.name,
-      confidence: selectedDisease.confidence,
-      severity: selectedDisease.severity,
-      description: selectedDisease.description,
-      recommendations: selectedDisease.recommendations,
+      disease_code: diseaseCode,
+      disease_name: info.fullName,
+      confidence: confidence,
+      severity: info.severity,
+      description: info.description,
+      recommendations: info.recommendations,
+      all_probabilities: prediction.all_probabilities || {},
     });
   } catch (error: any) {
     console.error('Analysis error:', error);
